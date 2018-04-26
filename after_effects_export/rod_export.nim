@@ -605,7 +605,7 @@ proc ninePartSpriteGeometry(layer: Layer): array[4, float] =
 
     result = [marginLeft, marginRight, marginTop, marginBottom]
 
-proc extractShapeTransformProp(layer: Layer): seq[Property[Vector2]] =
+proc extractShapeTransformProp(layer: Layer): tuple[position: Property[Vector2], anchor: Property[Vector2], scale: Property[Vector2]] =
     let vectorLayer = layer.property("Contents")
 
     if not vectorLayer.isNil:
@@ -621,13 +621,13 @@ proc extractShapeTransformProp(layer: Layer): seq[Property[Vector2]] =
                     if not transP.isNil:
                         let trans = transP.toPropertyGroup()
                         if not trans.isNil:
-                            result = newSeq[Property[Vector2]](3)
+                            result = (
+                                position: trans.property("Position", Vector2),
 
-                            result[0] = trans.property("Anchor Point", Vector2)
+                                anchor: trans.property("Anchor Point", Vector2),
 
-                            result[1] = trans.property("Position", Vector2)
-
-                            result[2] = trans.property("Scale", Vector2)
+                                scale: trans.property("Scale", Vector2)
+                            )
                             return
 
 
@@ -878,17 +878,14 @@ proc serializeLayer(layer: Layer): JsonNode =
 
     else:
         let props = layer.extractShapeTransformProp()
-        logi "Try extract shape trans ", not props.isNil
-        if not props.isNil:
-            for p in props:
-                logi "extr prop ", p.name
+        if not props.position.isNil:
 
             let position = addPropDesc(layer, -1, "translation", transform.property("Position", Vector3), newVector3()) do(v: Vector3, frame: tuple[time: float, key: int]) -> JsonNode:
                 var ep: Vector2
                 if frame.time > -1:
-                    ep = props[1].valueAtTime(frame.time)
+                    ep = props.position.valueAtTime(frame.time)
                 else:
-                    ep = props[1].keyValue(frame.key)
+                    ep = props.position.keyValue(frame.key)
 
                 let cp = newVector3(v.x, v.y, v.z * -1.0) + newVector3(ep.x, -ep.y)
 
@@ -902,9 +899,9 @@ proc serializeLayer(layer: Layer): JsonNode =
             let scale = addPropDesc(layer, -1, "scale", transform.property("Scale", Vector3), newVector3(100, 100, 100)) do(v: Vector3, frame: tuple[time: float, key: int]) -> JsonNode:
                 var es: Vector2
                 if frame.time > -1:
-                    es = props[2].valueAtTime(frame.time)
+                    es = props.scale.valueAtTime(frame.time)
                 else:
-                    es = props[2].keyValue(frame.key)
+                    es = props.scale.keyValue(frame.key)
 
                 es = es / 100
 
@@ -916,9 +913,9 @@ proc serializeLayer(layer: Layer): JsonNode =
             let anchor = addPropDesc(layer, -1, "anchor", transform.property("Anchor Point", Vector3), newVector3()) do(v: Vector3, frame: tuple[time: float, key: int]) -> JsonNode:
                 var ep: Vector2
                 if frame.time > -1:
-                    ep = props[0].valueAtTime(frame.time)
+                    ep = props.anchor.valueAtTime(frame.time)
                 else:
-                    ep = props[0].keyValue(frame.key)
+                    ep = props.anchor.keyValue(frame.key)
 
                 let val = v + newVector3(ep.x, ep.y)
                 %cutDecimal(val)
